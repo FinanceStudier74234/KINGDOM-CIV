@@ -1,0 +1,58 @@
+import { AdvisorDef } from '../types/game';
+
+export const ADVISORS: AdvisorDef[] = [
+  {
+    id: 'treasurer',
+    name: 'Lord Ashford',
+    title: 'Treasurer',
+    icon: '💰',
+    description: 'A shrewd financier. Increases gold income but may prioritize wealth over welfare.',
+    unlockTurn: 8,
+    passiveBonus: { goldIncome: 0.12 },
+  },
+  {
+    id: 'general',
+    name: 'Commander Ironhelm',
+    title: 'General',
+    icon: '⚔️',
+    description: 'A seasoned warrior. Strengthens the army and boosts morale.',
+    unlockTurn: 6,
+    passiveBonus: { armyPower: 0.15 },
+  },
+  {
+    id: 'steward',
+    name: 'Helena Greenfield',
+    title: 'Steward',
+    icon: '🌾',
+    description: 'Master of harvests. Improves food efficiency across the realm.',
+    unlockTurn: 5,
+    passiveBonus: { foodProduction: 0.12 },
+  },
+  {
+    id: 'priest',
+    name: 'Father Aldric',
+    title: 'High Priest',
+    icon: '✝️',
+    description: 'Voice of the faithful. Boosts happiness and stability through devotion.',
+    unlockTurn: 10,
+    passiveBonus: { stabilityChange: 0.08, happinessChange: 0.08 },
+  },
+  {
+    id: 'spymaster',
+    name: 'Shadow Kael',
+    title: 'Spymaster',
+    icon: '🗡️',
+    description: 'Sees threats before they strike. Reduces rebellion chance and boosts intel.',
+    unlockTurn: 12,
+    passiveBonus: { stabilityChange: 0.1 },
+  },
+  {
+    id: 'architect',
+    name: 'Master Stonewell',
+    title: 'Architect',
+    icon: '🔧',
+    description: 'Builder of wonders. Reduces building costs and improves defenses.',
+    unlockTurn: 8,
+    passiveBonus: { defenseBonus: 0.1 },
+  },
+];
