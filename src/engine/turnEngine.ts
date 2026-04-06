@@ -1,13 +1,18 @@
 import {
   GameState, TurnSummary, TurnSummaryEntry, GameResources,
-  UnrestLevel, DelayedEffect
+  UnrestLevel, DelayedEffect, Season
 } from '../types/game';
 import { DIFFICULTY_CONFIG } from '../data/difficulty';
 import { TAX_LEVELS } from '../data/policies';
 import { POLICIES } from '../data/policies';
 import { ADVISORS } from '../data/advisors';
 import { KINGDOM_TRAITS } from '../data/traits';
-import { getTotalBuildingEffect, getTotalUpkeep } from './gameState';
+import { KINGDOM_TYPES } from '../data/kingdoms';
+import { RULER_TRAITS } from '../data/rulers';
+import { TECHNOLOGIES } from '../data/technologies';
+import { getSeasonForTurn } from '../data/seasons';
+import { getTotalBuildingEffect, getTotalUpkeep, addRulerXp } from './gameState';
+import { ACHIEVEMENTS } from '../data/achievements';
 
 function clamp(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v));
@@ -33,15 +38,44 @@ export function calculateTaxIncome(state: GameState): number {
 }
 
 export function calculateFoodProduction(state: GameState): number {
-  const config = DIFFICULTY_CONFIG[state.difficulty];
   const farmFood = getTotalBuildingEffect(state, 'foodProduction');
   const landBonus = state.resources.land * 3;
   let base = farmFood + landBonus;
+
+  // Apply season modifier
+  const season = getSeasonForTurn(state.turn);
+  base *= season.foodModifier;
 
   // Apply trait
   const trait = KINGDOM_TRAITS.find(t => t.id === state.trait);
   if (trait?.modifiers.foodProduction) {
     base *= (1 + trait.modifiers.foodProduction);
+  }
+
+  // Apply kingdom type modifier
+  const kt = KINGDOM_TYPES.find(k => k.id === state.kingdomType);
+  if (kt?.modifiers.foodProduction) {
+    base *= (1 + kt.modifiers.foodProduction);
+  }
+
+  // Apply ruler trait bonuses
+  if (state.ruler) {
+    for (const tid of state.ruler.traits) {
+      const rt = RULER_TRAITS.find(r => r.id === tid);
+      if (rt?.effects.foodProduction) {
+        base *= (1 + rt.effects.foodProduction);
+      }
+    }
+  }
+
+  // Apply tech bonuses
+  for (const tech of state.technologies || []) {
+    if (tech.researched) {
+      const tDef = TECHNOLOGIES.find(t => t.id === tech.id);
+      if (tDef?.effects.foodProduction) {
+        base *= (1 + tDef.effects.foodProduction);
+      }
+    }
   }
 
   // Apply policy bonuses
@@ -76,10 +110,40 @@ export function calculateGoldIncome(state: GameState): number {
   const tradeIncome = getTotalBuildingEffect(state, 'tradeIncome');
   let total = taxIncome + buildingIncome + tradeIncome;
 
+  // Season modifier
+  const season = getSeasonForTurn(state.turn);
+  total *= season.goldModifier;
+
   // Apply trait
   const trait = KINGDOM_TRAITS.find(t => t.id === state.trait);
   if (trait?.modifiers.goldIncome) {
     total *= (1 + trait.modifiers.goldIncome);
+  }
+
+  // Kingdom type
+  const kt = KINGDOM_TYPES.find(k => k.id === state.kingdomType);
+  if (kt?.modifiers.goldIncome) {
+    total *= (1 + kt.modifiers.goldIncome);
+  }
+
+  // Ruler traits
+  if (state.ruler) {
+    for (const tid of state.ruler.traits) {
+      const rt = RULER_TRAITS.find(r => r.id === tid);
+      if (rt?.effects.goldIncome) {
+        total *= (1 + rt.effects.goldIncome);
+      }
+    }
+  }
+
+  // Technologies
+  for (const tech of state.technologies || []) {
+    if (tech.researched) {
+      const tDef = TECHNOLOGIES.find(t => t.id === tech.id);
+      if (tDef?.effects.goldIncome) {
+        total *= (1 + tDef.effects.goldIncome);
+      }
+    }
   }
 
   // Apply policies
@@ -252,6 +316,34 @@ export function calculateStabilityChange(state: GameState): number {
   return change;
 }
 
+export function calculateTotalDefense(state: GameState): number {
+  let defense = getTotalBuildingEffect(state, 'defensePower');
+
+  // Apply trait defense bonus
+  const trait = KINGDOM_TRAITS.find(t => t.id === state.trait);
+  if (trait?.modifiers.defenseBonus) {
+    defense *= (1 + trait.modifiers.defenseBonus);
+  }
+
+  // Apply policy defense bonuses
+  for (const pid of state.activePolicies) {
+    const p = POLICIES.find(pp => pp.id === pid);
+    if (p?.effects.defenseBonus) {
+      defense *= (1 + p.effects.defenseBonus);
+    }
+  }
+
+  // Apply advisor defense bonuses
+  for (const aid of state.activeAdvisors) {
+    const a = ADVISORS.find(aa => aa.id === aid);
+    if (a?.passiveBonus.defenseBonus) {
+      defense *= (1 + a.passiveBonus.defenseBonus);
+    }
+  }
+
+  return Math.floor(defense);
+}
+
 export function calculateThreatChange(state: GameState): number {
   const config = DIFFICULTY_CONFIG[state.difficulty];
   let change = config.threatGrowth;
@@ -265,9 +357,10 @@ export function calculateThreatChange(state: GameState): number {
     change -= 1;
   }
 
-  // Walls reduce threat
-  const defense = getTotalBuildingEffect(state, 'defensePower');
+  // Walls/defense reduces threat (uses full defense calc now)
+  const defense = calculateTotalDefense(state);
   if (defense > 15) change -= 1;
+  if (defense > 30) change -= 1;
 
   // Low stability invites attack
   if (state.resources.stability < 30) change += 1;
@@ -275,7 +368,7 @@ export function calculateThreatChange(state: GameState): number {
   // Land increases threat
   change += state.resources.land * 0.3;
 
-  // Defensive posture
+  // Defensive posture already included in calculateTotalDefense, but also reduces threat growth
   if (state.activePolicies.includes('defensive_posture')) {
     change -= 1;
   }
@@ -304,8 +397,8 @@ export function checkInvasion(state: GameState): { invaded: boolean; result?: st
   const chance = config.invasionChance * (state.resources.threat / 50);
   if (Math.random() > chance) return { invaded: false };
 
-  // Battle resolution
-  const defense = getTotalBuildingEffect(state, 'defensePower');
+  // Battle resolution (uses full defense including policies/advisors/traits)
+  const defense = calculateTotalDefense(state);
   const armyStrength = state.resources.armySize * (state.resources.armyMorale / 100) *
     (state.resources.armyPower / 10) + defense;
 
@@ -478,7 +571,7 @@ export function processTurn(state: GameState): { newState: GameState; summary: T
   // 9. Process delayed effects
   const remainingDelayed: DelayedEffect[] = [];
   for (const de of state.delayedEffects) {
-    if (de.triggerTurn <= state.turn + 1) {
+    if (de.triggerTurn <= state.turn) {
       resources = applyEffects(resources, de.effects);
       events.push(de.message);
     } else {
@@ -519,6 +612,32 @@ export function processTurn(state: GameState): { newState: GameState; summary: T
   resources.land = Math.max(1, resources.land);
   resources.threat = clamp(resources.threat, 0, 100);
 
+  // 13. Process research
+  let technologies = [...(state.technologies || [])];
+  let currentResearch = state.currentResearch;
+  if (currentResearch) {
+    const idx = technologies.findIndex(t => t.id === currentResearch);
+    if (idx >= 0 && !technologies[idx].researched) {
+      const researchSpeed = 1 + getTotalBuildingEffect(state, 'researchSpeed') * 0.15;
+      technologies[idx] = {
+        ...technologies[idx],
+        turnsRemaining: Math.max(0, technologies[idx].turnsRemaining - researchSpeed),
+      };
+      if (technologies[idx].turnsRemaining <= 0) {
+        technologies[idx] = { ...technologies[idx], researched: true, turnsRemaining: 0 };
+        const tDef = TECHNOLOGIES.find(t => t.id === currentResearch);
+        events.push(`📚 Research complete: ${tDef?.name || currentResearch}!`);
+        currentResearch = null;
+      }
+    }
+  }
+
+  // 14. Season update
+  const season = getSeasonForTurn(state.turn + 1);
+
+  // 15. Ruler XP (passive: 2 XP per turn survived)
+  let ruler = state.ruler ? { ...state.ruler, turnsRuled: (state.ruler.turnsRuled || 0) + 1 } : state.ruler;
+
   // Update peak
   const peakPop = Math.max(state.peakPopulation, resources.population);
 
@@ -528,14 +647,33 @@ export function processTurn(state: GameState): { newState: GameState; summary: T
     events,
   };
 
-  const newState: GameState = {
+  let newState: GameState = {
     ...state,
     turn: state.turn + 1,
+    season: season.id,
     resources,
     delayedEffects: remainingDelayed,
     peakPopulation: peakPop,
     turnHistory: [...state.turnHistory.slice(-49), summary],
+    technologies,
+    currentResearch,
+    ruler,
   };
+
+  // Add passive ruler XP
+  newState = addRulerXp(newState, 2);
+
+  // Check achievements
+  const updatedAchievements = (newState.achievements || []).map((a) => {
+    if (a.unlocked) return a;
+    const def = ACHIEVEMENTS.find(ad => ad.id === a.id);
+    if (def && def.condition(newState)) {
+      events.push(`🏆 Achievement Unlocked: ${def.name}!`);
+      return { ...a, unlocked: true, unlockedAt: newState.turn };
+    }
+    return a;
+  });
+  newState.achievements = updatedAchievements;
 
   return { newState, summary };
 }

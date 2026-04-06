@@ -52,6 +52,26 @@ export const GameOverScreen: React.FC<Props> = ({ state, onRestart, onMenu }) =>
             <span className="go-label">Kingdom Trait</span>
             <span className="go-value">{state.trait.replace(/_/g, ' ')}</span>
           </div>
+          {state.ruler && (
+            <>
+              <div className="go-stat">
+                <span className="go-label">Ruler</span>
+                <span className="go-value">{state.ruler.name}</span>
+              </div>
+              <div className="go-stat">
+                <span className="go-label">Ruler Level</span>
+                <span className="go-value">Lvl {state.ruler.level}</span>
+              </div>
+            </>
+          )}
+          <div className="go-stat">
+            <span className="go-label">Achievements</span>
+            <span className="go-value">{(state.achievements || []).filter(a => a.unlocked).length}</span>
+          </div>
+          <div className="go-stat">
+            <span className="go-label">Technologies</span>
+            <span className="go-value">{(state.technologies || []).filter(t => t.researched).length}</span>
+          </div>
         </div>
 
         <div className="gameover-actions">

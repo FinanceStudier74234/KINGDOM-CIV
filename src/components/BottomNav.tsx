@@ -11,7 +11,8 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'build', label: 'Build', icon: '🏗️' },
   { id: 'army', label: 'Army', icon: '⚔️' },
   { id: 'policies', label: 'Policies', icon: '📜' },
-  { id: 'history', label: 'History', icon: '📖' },
+  { id: 'ruler', label: 'Ruler', icon: '👑' },
+  { id: 'history', label: 'Log', icon: '📖' },
 ];
 
 export const BottomNav: React.FC<Props> = ({ currentTab, onTabChange }) => {

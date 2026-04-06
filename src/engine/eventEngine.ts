@@ -2,6 +2,7 @@ import { GameState, GameEvent, ActiveEvent, DelayedEffect } from '../types/game'
 import { GAME_EVENTS } from '../data/events';
 import { applyEffects } from './turnEngine';
 import { DIFFICULTY_CONFIG } from '../data/difficulty';
+import { addRulerXp, addStoryEntry } from './gameState';
 
 function weightedRandom(events: GameEvent[]): GameEvent {
   const totalWeight = events.reduce((sum, e) => sum + (e.weight || 1), 0);
@@ -103,7 +104,7 @@ export function resolveEvent(
   const occurrences = { ...state.eventOccurrences };
   occurrences[event.id] = (occurrences[event.id] || 0) + 1;
 
-  return {
+  let newState: GameState = {
     ...state,
     resources,
     currentEvent: { ...state.currentEvent, resolved: true, choiceIndex },
@@ -111,6 +112,22 @@ export function resolveEvent(
     eventHistory: [...state.eventHistory, event.id],
     eventOccurrences: occurrences,
   };
+
+  // Add ruler XP from event choice
+  if (choice.rulerXp && choice.rulerXp > 0) {
+    newState = addRulerXp(newState, choice.rulerXp);
+  }
+
+  // Add to story log
+  const storyCategory = event.category === 'war' ? 'war' : event.category === 'ruler' ? 'ruler' : 'event';
+  newState = addStoryEntry(newState, `${event.title}: "${choice.text}"`, storyCategory as any);
+
+  // Track story chains
+  if (event.chainId && !newState.completedChains.includes(event.chainId)) {
+    newState = { ...newState, completedChains: [...newState.completedChains, event.chainId] };
+  }
+
+  return newState;
 }
 
 // Re-attach conditions after load (conditions are functions that can't be serialized)

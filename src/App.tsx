@@ -1,12 +1,14 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   GameState, GamePhase, Tab, TaxLevel, BuildingId,
   PolicyId, AdvisorId, TurnSummary, Difficulty, KingdomTrait,
+  KingdomType, RulerBackground, TechId,
 } from './types/game';
-import { createNewGame, saveGame, loadGame, deleteSave } from './engine/gameState';
+import { createNewGame, saveGame, loadGame, deleteSave, addRulerXp } from './engine/gameState';
 import { processTurn, checkGameOver, calculateScore } from './engine/turnEngine';
 import { rollForEvent, resolveEvent } from './engine/eventEngine';
 import { BUILDINGS, getBuildingCost, getBuildingUpgradeCost } from './data/buildings';
+import { TECHNOLOGIES } from './data/technologies';
 
 import { MainMenu } from './components/MainMenu';
 import { SetupScreen } from './components/SetupScreen';
@@ -16,6 +18,7 @@ import { BuildTab } from './components/BuildTab';
 import { ArmyTab } from './components/ArmyTab';
 import { PoliciesTab } from './components/PoliciesTab';
 import { HistoryTab } from './components/HistoryTab';
+import { RulerTab } from './components/RulerTab';
 import { EventModal } from './components/EventModal';
 import { TurnSummaryModal } from './components/TurnSummaryModal';
 import { GameOverScreen } from './components/GameOverScreen';
@@ -38,8 +41,11 @@ function App() {
     }
   };
 
-  const handleStartGame = (name: string, difficulty: Difficulty, trait: KingdomTrait) => {
-    const state = createNewGame(name, difficulty, trait);
+  const handleStartGame = (
+    name: string, difficulty: Difficulty, trait: KingdomTrait,
+    kingdomType: KingdomType, rulerName: string, rulerBackground: RulerBackground
+  ) => {
+    const state = createNewGame(name, difficulty, trait, kingdomType, rulerName, rulerBackground);
     setGameState(state);
     setPhase('playing');
     saveGame(state);
@@ -54,9 +60,7 @@ function App() {
     });
   }, []);
 
-  const handleSetTax = (level: TaxLevel) => {
-    updateState(s => ({ ...s, taxLevel: level }));
-  };
+  const handleSetTax = (level: TaxLevel) => updateState(s => ({ ...s, taxLevel: level }));
 
   const handleBuild = (id: BuildingId) => {
     updateState(s => {
@@ -94,14 +98,10 @@ function App() {
       const cost = getBuildingUpgradeCost(def, existing.level);
       if (s.resources.gold < cost) return s;
 
-      const newBuildings = s.buildings.map(b =>
-        b.id === id ? { ...b, level: b.level + 1 } : b
-      );
-
       return {
         ...s,
         resources: { ...s.resources, gold: s.resources.gold - cost },
-        buildings: newBuildings,
+        buildings: s.buildings.map(b => b.id === id ? { ...b, level: b.level + 1 } : b),
       };
     });
   };
@@ -109,8 +109,7 @@ function App() {
   const handleRecruit = (amount: number) => {
     updateState(s => {
       const cost = amount * 8;
-      if (s.resources.gold < cost) return s;
-      if (s.resources.population < 10) return s;
+      if (s.resources.gold < cost || s.resources.population < 10) return s;
       return {
         ...s,
         resources: {
@@ -141,29 +140,39 @@ function App() {
   const handleTogglePolicy = (id: PolicyId) => {
     updateState(s => {
       const isActive = s.activePolicies.includes(id);
-      if (isActive) {
-        return { ...s, activePolicies: s.activePolicies.filter(p => p !== id) };
-      } else {
-        return { ...s, activePolicies: [...s.activePolicies, id] };
-      }
+      return {
+        ...s,
+        activePolicies: isActive
+          ? s.activePolicies.filter(p => p !== id)
+          : [...s.activePolicies, id],
+      };
     });
   };
 
   const handleToggleAdvisor = (id: AdvisorId) => {
     updateState(s => {
       const isActive = s.activeAdvisors.includes(id);
-      if (isActive) {
-        return { ...s, activeAdvisors: s.activeAdvisors.filter(a => a !== id) };
-      } else {
-        if (s.activeAdvisors.length >= 3) return s;
-        return { ...s, activeAdvisors: [...s.activeAdvisors, id] };
-      }
+      if (isActive) return { ...s, activeAdvisors: s.activeAdvisors.filter(a => a !== id) };
+      if (s.activeAdvisors.length >= 3) return s;
+      return { ...s, activeAdvisors: [...s.activeAdvisors, id] };
     });
   };
 
-  const handleTabChange = (tab: Tab) => {
-    updateState(s => ({ ...s, currentTab: tab }));
+  const handleStartResearch = (techId: TechId) => {
+    updateState(s => {
+      if (s.currentResearch) return s;
+      const tDef = TECHNOLOGIES.find(t => t.id === techId);
+      if (!tDef) return s;
+      if (s.resources.gold < tDef.cost) return s;
+      return {
+        ...s,
+        currentResearch: techId,
+        resources: { ...s.resources, gold: s.resources.gold - tDef.cost },
+      };
+    });
   };
+
+  const handleTabChange = (tab: Tab) => updateState(s => ({ ...s, currentTab: tab }));
 
   const executeTurn = (state: GameState) => {
     const { newState, summary } = processTurn(state);
@@ -192,7 +201,6 @@ function App() {
 
   const handleNextTurn = () => {
     if (!gameState) return;
-
     const event = rollForEvent(gameState);
     if (event) {
       const updated = { ...gameState, currentEvent: event };
@@ -201,13 +209,11 @@ function App() {
       setPhase('event');
       return;
     }
-
     executeTurn(gameState);
   };
 
   const handleEventChoice = (index: number) => {
     if (!gameState) return;
-
     const resolved = resolveEvent(gameState, index);
     executeTurn(resolved);
   };
@@ -220,63 +226,31 @@ function App() {
   const handleTutorialNext = () => {
     updateState(s => {
       const nextStep = s.tutorialStep + 1;
-      if (nextStep >= 6) return { ...s, tutorialStep: nextStep, tutorialDone: true };
-      return { ...s, tutorialStep: nextStep };
+      return nextStep >= 6 ? { ...s, tutorialStep: nextStep, tutorialDone: true } : { ...s, tutorialStep: nextStep };
     });
   };
 
-  const handleTutorialSkip = () => {
-    updateState(s => ({ ...s, tutorialDone: true }));
-  };
+  const handleTutorialSkip = () => updateState(s => ({ ...s, tutorialDone: true }));
 
-  const handleRestart = () => {
-    deleteSave();
-    setGameState(null);
-    setPhase('setup');
-  };
-
-  const handleMenu = () => {
-    setGameState(null);
-    setPhase('menu');
-  };
+  const handleRestart = () => { deleteSave(); setGameState(null); setPhase('setup'); };
+  const handleMenu = () => { setGameState(null); setPhase('menu'); };
 
   // Render
-  if (phase === 'menu') {
-    return <MainMenu onNewGame={handleNewGame} onContinue={handleContinue} />;
-  }
-
-  if (phase === 'setup') {
-    return <SetupScreen onStart={handleStartGame} onBack={() => setPhase('menu')} />;
-  }
-
-  if (phase === 'gameover' && gameState) {
-    return <GameOverScreen state={gameState} onRestart={handleRestart} onMenu={handleMenu} />;
-  }
-
+  if (phase === 'menu') return <MainMenu onNewGame={handleNewGame} onContinue={handleContinue} />;
+  if (phase === 'setup') return <SetupScreen onStart={handleStartGame} onBack={() => setPhase('menu')} />;
+  if (phase === 'gameover' && gameState) return <GameOverScreen state={gameState} onRestart={handleRestart} onMenu={handleMenu} />;
   if (!gameState) return null;
 
   return (
     <div className="game-container">
       {!gameState.tutorialDone && gameState.turn === 1 && (
-        <Tutorial
-          step={gameState.tutorialStep}
-          onNext={handleTutorialNext}
-          onSkip={handleTutorialSkip}
-        />
+        <Tutorial step={gameState.tutorialStep} onNext={handleTutorialNext} onSkip={handleTutorialSkip} />
       )}
-
       {phase === 'event' && gameState.currentEvent && (
-        <EventModal
-          event={gameState.currentEvent}
-          onChoice={handleEventChoice}
-        />
+        <EventModal event={gameState.currentEvent} onChoice={handleEventChoice} />
       )}
-
       {phase === 'summary' && turnSummary && (
-        <TurnSummaryModal
-          summary={turnSummary}
-          onContinue={handleSummaryContinue}
-        />
+        <TurnSummaryModal summary={turnSummary} onContinue={handleSummaryContinue} />
       )}
 
       <ResourceBar state={gameState} />
@@ -293,6 +267,9 @@ function App() {
         )}
         {gameState.currentTab === 'policies' && (
           <PoliciesTab state={gameState} onTogglePolicy={handleTogglePolicy} onToggleAdvisor={handleToggleAdvisor} />
+        )}
+        {gameState.currentTab === 'ruler' && (
+          <RulerTab state={gameState} onStartResearch={handleStartResearch} />
         )}
         {gameState.currentTab === 'history' && (
           <HistoryTab state={gameState} />

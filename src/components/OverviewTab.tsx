@@ -4,6 +4,7 @@ import { TAX_LEVELS } from '../data/policies';
 import {
   calculateGoldIncome, calculateGoldExpenses,
   calculateFoodProduction, calculateFoodConsumption,
+  calculateTotalDefense,
   getUnrestLevel,
 } from '../engine/turnEngine';
 import { getTotalBuildingEffect } from '../engine/gameState';
@@ -21,7 +22,7 @@ export const OverviewTab: React.FC<Props> = ({ state, onSetTax, onNextTurn }) =>
   const foodCons = calculateFoodConsumption(state);
   const maxPop = state.maxPopulation + getTotalBuildingEffect(state, 'populationCapacity');
   const maxFoodStore = state.maxFood + getTotalBuildingEffect(state, 'foodStorage');
-  const defense = getTotalBuildingEffect(state, 'defensePower');
+  const defense = calculateTotalDefense(state);
   const unrest = getUnrestLevel(state);
 
   return (

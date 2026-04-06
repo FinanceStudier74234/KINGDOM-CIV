@@ -1,7 +1,8 @@
 import React from 'react';
-import { GameResources, UnrestLevel } from '../types/game';
+import { UnrestLevel } from '../types/game';
 import { getUnrestLevel } from '../engine/turnEngine';
 import { GameState } from '../types/game';
+import { getSeasonForTurn } from '../data/seasons';
 
 interface Props {
   state: GameState;
@@ -33,6 +34,7 @@ function getTurnDate(turn: number): string {
 export const ResourceBar: React.FC<Props> = ({ state }) => {
   const { resources, turn, kingdomName } = state;
   const unrest = getUnrestLevel(state);
+  const season = getSeasonForTurn(turn);
 
   const stats = [
     { icon: '💰', label: 'Gold', value: formatNum(resources.gold), warn: resources.gold < 20 },
@@ -49,7 +51,7 @@ export const ResourceBar: React.FC<Props> = ({ state }) => {
     <div className="resource-bar">
       <div className="resource-header">
         <span className="kingdom-name">👑 {kingdomName}</span>
-        <span className="turn-info">{getTurnDate(turn)} (Turn {turn})</span>
+        <span className="turn-info">{season.icon} {getTurnDate(turn)} (Turn {turn})</span>
       </div>
       <div className="resource-grid">
         {stats.map(s => (

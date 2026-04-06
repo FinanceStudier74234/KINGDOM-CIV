@@ -1,26 +1,101 @@
-import { GameState, Difficulty, KingdomTrait, BuildingState } from '../types/game';
+import { GameState, Difficulty, KingdomTrait, KingdomType, BuildingState, Ruler, RulerBackground, TechState, Season } from '../types/game';
 import { DIFFICULTY_CONFIG } from '../data/difficulty';
 import { BUILDINGS } from '../data/buildings';
+import { RULER_BACKGROUNDS } from '../data/rulers';
+import { KINGDOM_TYPES } from '../data/kingdoms';
+import { TECHNOLOGIES } from '../data/technologies';
+import { generateRivalsForGame } from '../data/rivals';
+import { ACHIEVEMENTS } from '../data/achievements';
 
 export function createNewGame(
   kingdomName: string,
   difficulty: Difficulty,
-  trait: KingdomTrait
+  trait: KingdomTrait,
+  kingdomType: KingdomType,
+  rulerName: string,
+  rulerBackground: RulerBackground,
 ): GameState {
   const config = DIFFICULTY_CONFIG[difficulty];
+  const bgDef = RULER_BACKGROUNDS.find(b => b.id === rulerBackground)!;
+  const ktDef = KINGDOM_TYPES.find(k => k.id === kingdomType)!;
+
+  // Merge starting resources
+  const resources = { ...config.startingResources };
+
+  // Apply kingdom type bonuses
+  if (ktDef.startingResources) {
+    for (const [key, val] of Object.entries(ktDef.startingResources)) {
+      if (typeof val === 'number' && key in resources) {
+        (resources as Record<string, number>)[key] += val;
+      }
+    }
+  }
+
+  // Apply ruler background bonuses
+  if (bgDef.bonusResources) {
+    for (const [key, val] of Object.entries(bgDef.bonusResources)) {
+      if (typeof val === 'number' && key in resources) {
+        (resources as Record<string, number>)[key] += val;
+      }
+    }
+  }
+
+  // Clamp values
+  resources.happiness = Math.max(10, Math.min(100, resources.happiness));
+  resources.stability = Math.max(10, Math.min(100, resources.stability));
+  resources.armySize = Math.max(2, resources.armySize);
+  resources.gold = Math.max(20, resources.gold);
+  resources.food = Math.max(20, resources.food);
 
   const initialBuildings: BuildingState[] = [
     { id: 'farm', level: 0, count: 2 },
     { id: 'house', level: 0, count: 2 },
   ];
 
+  // Add bonus building from kingdom type
+  if (ktDef.bonusBuilding) {
+    const existing = initialBuildings.find(b => b.id === ktDef.bonusBuilding);
+    if (existing) {
+      existing.count += 1;
+    } else {
+      initialBuildings.push({ id: ktDef.bonusBuilding, level: 0, count: 1 });
+    }
+  }
+
+  const ruler: Ruler = {
+    name: rulerName || 'The Monarch',
+    background: rulerBackground,
+    traits: [bgDef.startingTrait],
+    level: 1,
+    experience: 0,
+    turnsRuled: 0,
+    battlesWon: 0,
+    battlesLost: 0,
+    title: bgDef.title,
+  };
+
+  const technologies: TechState[] = TECHNOLOGIES.map(t => ({
+    id: t.id,
+    researched: false,
+    turnsRemaining: t.researchTurns,
+  }));
+
+  const rivals = generateRivalsForGame();
+
+  const achievements = ACHIEVEMENTS.map(a => ({
+    id: a.id,
+    unlocked: false,
+  }));
+
   return {
     phase: 'playing',
     kingdomName,
     difficulty,
     trait,
+    kingdomType,
     turn: 1,
-    resources: { ...config.startingResources },
+    season: 'spring' as Season,
+    resources,
     maxFood: config.maxFood,
     maxPopulation: config.maxPopulation,
     taxLevel: 'normal',
@@ -35,12 +110,19 @@ export function createNewGame(
     eventOccurrences: {},
     gameOverReason: '',
     score: 0,
-    peakPopulation: config.startingResources.population,
+    peakPopulation: resources.population,
     totalGoldEarned: 0,
     totalTurnsAtWar: 0,
     tutorialStep: 0,
     tutorialDone: false,
     currentTab: 'overview',
+    ruler,
+    storyLog: [],
+    technologies,
+    currentResearch: null,
+    rivals,
+    achievements,
+    completedChains: [],
   };
 }
 
@@ -58,7 +140,15 @@ export function loadGame(): GameState | null {
     const data = localStorage.getItem('kingdom_rise_save');
     if (!data) return null;
     const state = JSON.parse(data) as GameState;
-    // Restore event condition functions (they can't be serialized)
+    // Ensure new fields exist for old saves
+    if (!state.ruler) return null;
+    if (!state.technologies) state.technologies = [];
+    if (!state.storyLog) state.storyLog = [];
+    if (!state.rivals) state.rivals = [];
+    if (!state.achievements) state.achievements = [];
+    if (!state.completedChains) state.completedChains = [];
+    if (!state.kingdomType) state.kingdomType = 'feudal_monarchy';
+    if (!state.season) state.season = 'spring';
     return state;
   } catch {
     return null;
@@ -103,4 +193,28 @@ export function getTotalUpkeep(state: GameState): number {
     total += def.upkeep * bs.count * (1 + bs.level * 0.2);
   }
   return Math.floor(total);
+}
+
+export function addRulerXp(state: GameState, xp: number): GameState {
+  if (xp <= 0) return state;
+  const ruler = { ...state.ruler };
+  ruler.experience += xp;
+
+  // Level up check
+  const thresholds = [0, 50, 150, 300, 500, 800, 1200, 2000];
+  for (let i = thresholds.length - 1; i >= 0; i--) {
+    if (ruler.experience >= thresholds[i] && ruler.level < i + 1) {
+      ruler.level = i + 1;
+    }
+  }
+
+  return { ...state, ruler };
+}
+
+export function addStoryEntry(state: GameState, text: string, category: 'event' | 'war' | 'build' | 'ruler' | 'achievement' | 'disaster'): GameState {
+  const entry = { turn: state.turn, text, category };
+  return {
+    ...state,
+    storyLog: [...state.storyLog.slice(-99), entry],
+  };
 }

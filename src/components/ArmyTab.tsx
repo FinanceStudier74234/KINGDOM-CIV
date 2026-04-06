@@ -1,6 +1,8 @@
 import React from 'react';
 import { GameState } from '../types/game';
 import { getTotalBuildingEffect } from '../engine/gameState';
+import { calculateTotalDefense } from '../engine/turnEngine';
+import { DIFFICULTY_CONFIG } from '../data/difficulty';
 
 interface Props {
   state: GameState;
@@ -10,13 +12,16 @@ interface Props {
 
 export const ArmyTab: React.FC<Props> = ({ state, onRecruit, onTrain }) => {
   const { resources } = state;
+  const config = DIFFICULTY_CONFIG[state.difficulty];
   const armyCap = 10 + getTotalBuildingEffect(state, 'armyCapacity');
-  const defense = getTotalBuildingEffect(state, 'defensePower');
-  const recruitCost = 8; // gold per soldier
+  const defense = calculateTotalDefense(state);
+  const recruitCost = 8;
   const canRecruit1 = resources.gold >= recruitCost && resources.armySize < armyCap && resources.population > 10;
   const canRecruit5 = resources.gold >= recruitCost * 5 && resources.armySize + 5 <= armyCap && resources.population > 15;
   const trainCost = 15;
   const canTrain = resources.gold >= trainCost && resources.armySize > 0;
+  const armyGoldUpkeep = Math.floor(resources.armySize * 1.5 * config.upkeepMultiplier);
+  const armyFoodUpkeep = Math.floor(resources.armySize * config.armyFoodRate);
 
   return (
     <div className="tab-content army-tab">
@@ -47,7 +52,7 @@ export const ArmyTab: React.FC<Props> = ({ state, onRecruit, onTrain }) => {
           </div>
           <div className="army-stat">
             <span className="stat-label">Defense Power</span>
-            <span className="stat-value">{Math.floor(defense)}</span>
+            <span className="stat-value">{defense}</span>
           </div>
           <div className="army-stat">
             <span className="stat-label">Threat Level</span>
@@ -65,7 +70,7 @@ export const ArmyTab: React.FC<Props> = ({ state, onRecruit, onTrain }) => {
           </div>
           <div className="army-stat">
             <span className="stat-label">Upkeep</span>
-            <span className="stat-value stat-negative">{Math.floor(resources.armySize * 1.5)}g + {Math.floor(resources.armySize * 1.2)}f / turn</span>
+            <span className="stat-value stat-negative">{armyGoldUpkeep}g + {armyFoodUpkeep}f / turn</span>
           </div>
         </div>
       </div>
@@ -74,18 +79,10 @@ export const ArmyTab: React.FC<Props> = ({ state, onRecruit, onTrain }) => {
         <h3 className="card-title">Recruitment</h3>
         <p className="card-desc">Each soldier costs {recruitCost} gold. Soldiers consume food and gold each turn.</p>
         <div className="army-actions">
-          <button
-            className="btn btn-build"
-            disabled={!canRecruit1}
-            onClick={() => onRecruit(1)}
-          >
+          <button className="btn btn-build" disabled={!canRecruit1} onClick={() => onRecruit(1)}>
             Recruit 1 ({recruitCost}g)
           </button>
-          <button
-            className="btn btn-build"
-            disabled={!canRecruit5}
-            onClick={() => onRecruit(5)}
-          >
+          <button className="btn btn-build" disabled={!canRecruit5} onClick={() => onRecruit(5)}>
             Recruit 5 ({recruitCost * 5}g)
           </button>
         </div>
@@ -94,11 +91,7 @@ export const ArmyTab: React.FC<Props> = ({ state, onRecruit, onTrain }) => {
       <div className="card">
         <h3 className="card-title">Training</h3>
         <p className="card-desc">Train your troops to increase army power and morale.</p>
-        <button
-          className="btn btn-upgrade"
-          disabled={!canTrain}
-          onClick={onTrain}
-        >
+        <button className="btn btn-upgrade" disabled={!canTrain} onClick={onTrain}>
           Train Army ({trainCost}g) → +2 Power, +5 Morale
         </button>
       </div>
