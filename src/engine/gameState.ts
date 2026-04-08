@@ -196,7 +196,7 @@ export function getTotalUpkeep(state: GameState): number {
 }
 
 export function addRulerXp(state: GameState, xp: number): GameState {
-  if (xp <= 0) return state;
+  if (xp <= 0 || !state.ruler) return state;
   const ruler = { ...state.ruler };
   ruler.experience += xp;
 

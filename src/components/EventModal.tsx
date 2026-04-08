@@ -14,6 +14,8 @@ export const EventModal: React.FC<Props> = ({ event, onChoice }) => {
     war: '#8e44ad',
     moral: '#2980b9',
     neutral: '#7f8c8d',
+    story: '#f39c12',
+    ruler: '#d4af37',
   };
 
   return (

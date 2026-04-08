@@ -172,6 +172,25 @@ function App() {
     });
   };
 
+  const handleCancelResearch = () => {
+    updateState(s => {
+      if (!s.currentResearch) return s;
+      // Refund half the gold cost
+      const tDef = TECHNOLOGIES.find(t => t.id === s.currentResearch);
+      const refund = tDef ? Math.floor(tDef.cost * 0.5) : 0;
+      // Reset research turns
+      const technologies = (s.technologies || []).map(t =>
+        t.id === s.currentResearch ? { ...t, turnsRemaining: tDef?.researchTurns || t.turnsRemaining } : t
+      );
+      return {
+        ...s,
+        currentResearch: null,
+        technologies,
+        resources: { ...s.resources, gold: s.resources.gold + refund },
+      };
+    });
+  };
+
   const handleTabChange = (tab: Tab) => updateState(s => ({ ...s, currentTab: tab }));
 
   const executeTurn = (state: GameState) => {
@@ -285,7 +304,7 @@ function App() {
           <PoliciesTab state={gameState} onTogglePolicy={handleTogglePolicy} onToggleAdvisor={handleToggleAdvisor} />
         )}
         {gameState.currentTab === 'ruler' && (
-          <RulerTab state={gameState} onStartResearch={handleStartResearch} />
+          <RulerTab state={gameState} onStartResearch={handleStartResearch} onCancelResearch={handleCancelResearch} />
         )}
         {gameState.currentTab === 'history' && (
           <HistoryTab state={gameState} />

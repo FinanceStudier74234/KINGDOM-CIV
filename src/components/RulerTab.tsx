@@ -9,10 +9,12 @@ import { getSeasonForTurn } from '../data/seasons';
 interface Props {
   state: GameState;
   onStartResearch: (techId: TechId) => void;
+  onCancelResearch: () => void;
 }
 
-export const RulerTab: React.FC<Props> = ({ state, onStartResearch }) => {
+export const RulerTab: React.FC<Props> = ({ state, onStartResearch, onCancelResearch }) => {
   const { ruler } = state;
+  if (!ruler) return <div className="tab-content"><div className="card"><p className="card-desc">Ruler data unavailable. Start a new game.</p></div></div>;
   const bgDef = RULER_BACKGROUNDS.find(b => b.id === ruler.background);
   const ktDef = KINGDOM_TYPES.find(k => k.id === state.kingdomType);
   const levelInfo = getRulerLevel(ruler.experience);
@@ -100,7 +102,10 @@ export const RulerTab: React.FC<Props> = ({ state, onStartResearch }) => {
                 backgroundColor: '#3498db',
               }} />
             </div>
-            <span className="research-eta">{Math.ceil(researchState.turnsRemaining)} turns remaining</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
+              <span className="research-eta">{Math.ceil(researchState.turnsRemaining)} turns remaining</span>
+              <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: '11px', minHeight: '28px' }} onClick={onCancelResearch}>Cancel</button>
+            </div>
           </div>
         ) : (
           <p className="card-desc">No active research. Choose a technology to study.</p>
@@ -143,6 +148,34 @@ export const RulerTab: React.FC<Props> = ({ state, onStartResearch }) => {
               <div key={i} className={`story-entry story-${entry.category}`}>
                 <span className="story-turn">Turn {entry.turn}</span>
                 <span className="story-text">{entry.text}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Rival Kingdoms */}
+      {(state.rivals || []).length > 0 && (
+        <div className="card">
+          <h3 className="card-title">🌍 Neighboring Kingdoms</h3>
+          <div className="rival-list">
+            {(state.rivals || []).map(r => (
+              <div key={r.id} className={`rival-item rival-${r.status}`}>
+                <div className="rival-header">
+                  <span className="rival-icon">{r.icon}</span>
+                  <div className="rival-info">
+                    <span className="rival-name">{r.name}</span>
+                    <span className="rival-personality">{r.personality}</span>
+                  </div>
+                  <span className={`rival-status status-${r.status}`}>
+                    {r.status.charAt(0).toUpperCase() + r.status.slice(1)}
+                  </span>
+                </div>
+                <p className="rival-desc">{r.description}</p>
+                <div className="rival-stats">
+                  <span>Strength: {r.strength}</span>
+                  <span>Relations: {r.relation > 0 ? '+' : ''}{r.relation}</span>
+                </div>
               </div>
             ))}
           </div>

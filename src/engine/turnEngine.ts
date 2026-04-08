@@ -185,9 +185,43 @@ export function calculatePopulationChange(state: GameState): number {
     growth = Math.floor(population * 0.03 * (happiness / 100));
   }
 
-  // Health bonus
+  // Health bonus from buildings
   const healthBonus = getTotalBuildingEffect(state, 'healthBonus');
   growth += healthBonus;
+
+  // Apply population growth modifiers from kingdom type
+  const kt = KINGDOM_TYPES.find(k => k.id === state.kingdomType);
+  if (kt?.modifiers.populationGrowth && growth > 0) {
+    growth = Math.floor(growth * (1 + kt.modifiers.populationGrowth));
+  }
+
+  // Apply ruler trait modifiers
+  if (state.ruler && growth > 0) {
+    for (const tid of state.ruler.traits) {
+      const rt = RULER_TRAITS.find(r => r.id === tid);
+      if (rt?.effects.populationGrowth) {
+        growth = Math.floor(growth * (1 + rt.effects.populationGrowth));
+      }
+    }
+  }
+
+  // Apply policy modifiers
+  for (const pid of state.activePolicies) {
+    const p = POLICIES.find(pp => pp.id === pid);
+    if (p?.effects.populationGrowth && growth > 0) {
+      growth = Math.floor(growth * (1 + p.effects.populationGrowth));
+    }
+  }
+
+  // Apply tech modifiers
+  for (const tech of state.technologies || []) {
+    if (tech.researched) {
+      const tDef = TECHNOLOGIES.find(t => t.id === tech.id);
+      if (tDef?.effects.populationGrowth && growth > 0) {
+        growth = Math.floor(growth * (1 + tDef.effects.populationGrowth));
+      }
+    }
+  }
 
   // Starvation
   if (food <= 0) {
@@ -251,10 +285,36 @@ export function calculateHappinessChange(state: GameState): number {
     }
   }
 
-  // Trait effect
+  // Kingdom trait effect
   const trait = KINGDOM_TRAITS.find(t => t.id === state.trait);
   if (trait?.modifiers.happinessChange) {
     change += Math.floor(trait.modifiers.happinessChange * 10);
+  }
+
+  // Kingdom type effect
+  const kt = KINGDOM_TYPES.find(k => k.id === state.kingdomType);
+  if (kt?.modifiers.happinessChange) {
+    change += Math.floor(kt.modifiers.happinessChange * 10);
+  }
+
+  // Ruler trait effects
+  if (state.ruler) {
+    for (const tid of state.ruler.traits) {
+      const rt = RULER_TRAITS.find(r => r.id === tid);
+      if (rt?.effects.happinessChange) {
+        change += Math.floor(rt.effects.happinessChange * 10);
+      }
+    }
+  }
+
+  // Tech effects
+  for (const tech of state.technologies || []) {
+    if (tech.researched) {
+      const tDef = TECHNOLOGIES.find(t => t.id === tech.id);
+      if (tDef?.effects.happinessChange) {
+        change += Math.floor(tDef.effects.happinessChange * 10);
+      }
+    }
   }
 
   // Natural regression toward 50
@@ -304,10 +364,36 @@ export function calculateStabilityChange(state: GameState): number {
     }
   }
 
-  // Trait
+  // Kingdom trait
   const trait = KINGDOM_TRAITS.find(t => t.id === state.trait);
   if (trait?.modifiers.stabilityChange) {
     change += Math.floor(trait.modifiers.stabilityChange * 10);
+  }
+
+  // Kingdom type effect
+  const kt = KINGDOM_TYPES.find(k => k.id === state.kingdomType);
+  if (kt?.modifiers.stabilityChange) {
+    change += Math.floor(kt.modifiers.stabilityChange * 10);
+  }
+
+  // Ruler trait effects
+  if (state.ruler) {
+    for (const tid of state.ruler.traits) {
+      const rt = RULER_TRAITS.find(r => r.id === tid);
+      if (rt?.effects.stabilityChange) {
+        change += Math.floor(rt.effects.stabilityChange * 10);
+      }
+    }
+  }
+
+  // Tech effects
+  for (const tech of state.technologies || []) {
+    if (tech.researched) {
+      const tDef = TECHNOLOGIES.find(t => t.id === tech.id);
+      if (tDef?.effects.stabilityChange) {
+        change += Math.floor(tDef.effects.stabilityChange * 10);
+      }
+    }
   }
 
   // Natural regression
@@ -381,6 +467,13 @@ export function calculateThreatChange(state: GameState): number {
   // Spy network reduces threat (uses spy_den buildings)
   const spyPower = getTotalBuildingEffect(state, 'spyPower');
   change -= spyPower * 0.15;
+
+  // Rival kingdoms influence threat
+  for (const rival of state.rivals || []) {
+    if (rival.status === 'hostile' || rival.status === 'war') change += 0.3;
+    if (rival.status === 'allied') change -= 0.4;
+    if (rival.status === 'friendly') change -= 0.2;
+  }
 
   // Threat naturally decays slightly when very high (enemies don't coordinate forever)
   if (state.resources.threat > 60) change -= 0.5;
@@ -529,9 +622,8 @@ export function processTurn(state: GameState): { newState: GameState; summary: T
   entries.push({ label: `Gold Income`, value: goldIncome, type: 'gold' });
   entries.push({ label: `Gold Expenses`, value: -goldExpenses, type: 'gold' });
 
-  if (netGold > 0) {
-    state.totalGoldEarned += netGold;
-  }
+  // Track total gold earned (applied to newState below, not mutating input)
+  let totalGoldEarned = state.totalGoldEarned + (netGold > 0 ? netGold : 0);
 
   // 2. Food production & consumption
   const foodProd = calculateFoodProduction(state);
@@ -676,6 +768,7 @@ export function processTurn(state: GameState): { newState: GameState; summary: T
     resources,
     delayedEffects: remainingDelayed,
     peakPopulation: peakPop,
+    totalGoldEarned,
     turnHistory: [...state.turnHistory.slice(-49), summary],
     technologies,
     currentResearch,

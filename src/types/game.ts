@@ -153,7 +153,6 @@ export interface BuildingEffects {
   defensePower?: number;
   happiness?: number;
   stability?: number;
-  productionSpeed?: number;
   tradeIncome?: number;
   healthBonus?: number;
   researchSpeed?: number;
