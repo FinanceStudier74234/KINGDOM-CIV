@@ -92,7 +92,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   {
     id: 'level_five_ruler', name: 'Wise Ruler', icon: '🧠',
     description: 'Reach ruler level 5.',
-    condition: (s: GameState) => s.ruler.level >= 5, unlocked: false,
+    condition: (s: GameState) => s.ruler && s.ruler.level >= 5, unlocked: false,
   },
   {
     id: 'event_veteran', name: 'Event Veteran', icon: '📖',

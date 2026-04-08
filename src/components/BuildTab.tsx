@@ -95,6 +95,7 @@ function formatEffect(key: string, value: number, level: number): string {
     stability: `+${v} Stability`,
     tradeIncome: `+${v} Trade`,
     researchSpeed: `+${v} Research`,
+    spyPower: `+${v} Spy Power`,
     healthBonus: `+${v} Health`,
   };
   return labels[key] || `+${v} ${key}`;
