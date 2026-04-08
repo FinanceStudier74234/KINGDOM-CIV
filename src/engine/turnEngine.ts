@@ -33,8 +33,9 @@ export function calculateTaxIncome(state: GameState): number {
   const taxDef = TAX_LEVELS.find(t => t.id === state.taxLevel)!;
   const happinessModifier = Math.max(0.5, state.resources.happiness / 100);
   const stabilityModifier = Math.max(0.6, state.resources.stability / 100);
-  const baseTax = state.resources.population * 0.4 * taxDef.goldMultiplier;
-  return Math.floor(baseTax * happinessModifier * stabilityModifier);
+  const baseTax = state.resources.population * 0.55 * taxDef.goldMultiplier;
+  // Minimum tax income so early game isn't completely starved
+  return Math.max(3, Math.floor(baseTax * happinessModifier * stabilityModifier));
 }
 
 export function calculateFoodProduction(state: GameState): number {
@@ -346,32 +347,43 @@ export function calculateTotalDefense(state: GameState): number {
 
 export function calculateThreatChange(state: GameState): number {
   const config = DIFFICULTY_CONFIG[state.difficulty];
-  let change = config.threatGrowth;
+  // Base threat grows slowly, scales with kingdom size (bigger = more attractive target)
+  let change = config.threatGrowth * (1 + state.resources.population / 200);
 
-  // Weak army increases threat
-  if (state.resources.armySize < 5) change += 2;
-  else if (state.resources.armySize < 10) change += 1;
+  // Weak army increases threat significantly
+  const armyRatio = state.resources.armySize / Math.max(1, state.resources.population * 0.15);
+  if (armyRatio < 0.5) change += 1.5;
+  else if (armyRatio < 1.0) change += 0.5;
 
-  // Strong army deters
+  // Strong army deters — scales with power
   if (state.resources.armySize > 20 && state.resources.armyPower > 25) {
-    change -= 1;
+    change -= 1.5;
+  } else if (state.resources.armySize > 15) {
+    change -= 0.5;
   }
 
-  // Walls/defense reduces threat (uses full defense calc now)
+  // Walls/defense reduces threat substantially
   const defense = calculateTotalDefense(state);
-  if (defense > 15) change -= 1;
-  if (defense > 30) change -= 1;
+  change -= defense * 0.05; // every 20 defense = -1 threat/turn
 
   // Low stability invites attack
   if (state.resources.stability < 30) change += 1;
+  if (state.resources.stability > 70) change -= 0.3;
 
-  // Land increases threat
-  change += state.resources.land * 0.3;
+  // Land increases threat (but diminishing)
+  change += Math.sqrt(state.resources.land) * 0.4;
 
-  // Defensive posture already included in calculateTotalDefense, but also reduces threat growth
+  // Defensive posture
   if (state.activePolicies.includes('defensive_posture')) {
     change -= 1;
   }
+
+  // Spy network reduces threat (uses spy_den buildings)
+  const spyPower = getTotalBuildingEffect(state, 'spyPower');
+  change -= spyPower * 0.15;
+
+  // Threat naturally decays slightly when very high (enemies don't coordinate forever)
+  if (state.resources.threat > 60) change -= 0.5;
 
   return Math.round(change * 10) / 10;
 }
@@ -392,17 +404,19 @@ export function processArmyMorale(state: GameState): number {
 
 export function checkInvasion(state: GameState): { invaded: boolean; result?: string; effects?: Partial<GameResources> } {
   const config = DIFFICULTY_CONFIG[state.difficulty];
-  if (state.resources.threat < 25) return { invaded: false };
+  if (state.resources.threat < 30) return { invaded: false };
 
-  const chance = config.invasionChance * (state.resources.threat / 50);
+  // Invasion chance scales with threat but has diminishing returns
+  const chance = config.invasionChance * Math.sqrt(state.resources.threat / 40);
   if (Math.random() > chance) return { invaded: false };
 
-  // Battle resolution (uses full defense including policies/advisors/traits)
+  // Battle resolution — defense is a strong factor (walls matter)
   const defense = calculateTotalDefense(state);
   const armyStrength = state.resources.armySize * (state.resources.armyMorale / 100) *
-    (state.resources.armyPower / 10) + defense;
+    (state.resources.armyPower / 10) + defense * 1.5 + state.resources.stability * 0.1;
 
-  const enemyStrength = state.resources.threat * 2 + Math.random() * 15;
+  // Enemy scales with threat but not as aggressively as before
+  const enemyStrength = state.resources.threat * 1.2 + Math.random() * 10 + (state.turn * 0.15);
 
   const ratio = armyStrength / Math.max(1, enemyStrength);
 
@@ -440,16 +454,24 @@ export function checkInvasion(state: GameState): { invaded: boolean; result?: st
 }
 
 export function checkRebellion(state: GameState): { rebellion: boolean; severity?: string; effects?: Partial<GameResources> } {
-  const config = DIFFICULTY_CONFIG[state.difficulty];
   const unrest = getUnrestLevel(state);
 
   if (unrest === 'stable' || unrest === 'tense') return { rebellion: false };
 
   let chance = 0;
-  if (unrest === 'unrest') chance = 0.05;
-  if (unrest === 'riots') chance = 0.15;
-  if (unrest === 'rebellion') chance = 0.3;
+  if (unrest === 'unrest') chance = 0.08;
+  if (unrest === 'riots') chance = 0.18;
+  if (unrest === 'rebellion') chance = 0.35;
   if (unrest === 'collapse') chance = 0.6;
+
+  // Spy network reduces rebellion chance
+  const spyPower = getTotalBuildingEffect(state, 'spyPower');
+  chance *= Math.max(0.3, 1 - spyPower * 0.05);
+
+  // Army presence suppresses rebellion
+  if (state.resources.armySize > state.resources.population * 0.2) {
+    chance *= 0.7;
+  }
 
   if (Math.random() > chance) return { rebellion: false };
 
@@ -676,6 +698,15 @@ export function processTurn(state: GameState): { newState: GameState; summary: T
   newState.achievements = updatedAchievements;
 
   return { newState, summary };
+}
+
+export function checkVictory(state: GameState): string | null {
+  // Victory requires achieving multiple goals simultaneously
+  const { resources, turn } = state;
+  if (turn >= 100 && resources.population >= 200 && resources.land >= 10 && resources.gold >= 500) {
+    return 'Your kingdom stands as a beacon of civilization! You have achieved true greatness — a prosperous realm with loyal subjects, vast territory, and overflowing coffers. History will remember you as one of the greatest rulers who ever lived.';
+  }
+  return null;
 }
 
 export function checkGameOver(state: GameState): string | null {

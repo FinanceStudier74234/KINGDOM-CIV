@@ -35,11 +35,11 @@ export const SEASONS: SeasonDef[] = [
     id: 'winter',
     name: 'Winter',
     icon: '❄️',
-    foodModifier: 0.5,
-    goldModifier: 0.85,
-    happinessModifier: 0.9,
-    threatModifier: 0.7,
-    description: 'The cruel cold arrives. Food is scarce, but few dare to invade.',
+    foodModifier: 0.65,
+    goldModifier: 0.9,
+    happinessModifier: 0.92,
+    threatModifier: 0.5,
+    description: 'The cold bites hard. Food production drops, but invaders stay home.',
   },
 ];
 

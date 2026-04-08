@@ -10,9 +10,9 @@ export const GAME_EVENTS: GameEvent[] = [
     category: 'good',
     weight: 3,
     choices: [
-      { text: 'Store the surplus', effects: { food: 30 } },
-      { text: 'Sell excess for gold', effects: { food: 10, gold: 25 } },
-      { text: 'Feast! Distribute to the people', effects: { food: -5, happiness: 8, stability: 3 } },
+      { text: 'Store the surplus for winter', effects: { food: 30 }, rulerXp: 5 },
+      { text: 'Sell excess for gold', effects: { food: 5, gold: 20, happiness: -2 }, rulerXp: 5 },
+      { text: 'Feast! Distribute to the people', effects: { food: -10, happiness: 7, stability: 3 }, rulerXp: 10 },
     ],
   },
   {
@@ -23,10 +23,10 @@ export const GAME_EVENTS: GameEvent[] = [
     category: 'good',
     weight: 3,
     choices: [
-      { text: 'Trade food for gold', effects: { food: -15, gold: 30 } },
-      { text: 'Buy food supplies', effects: { gold: -20, food: 25 } },
-      { text: 'Tax the merchants', effects: { gold: 15, happiness: -2 } },
-      { text: 'Welcome them freely', effects: { happiness: 4, gold: 5 } },
+      { text: 'Trade food for gold', effects: { food: -15, gold: 25 }, rulerXp: 5 },
+      { text: 'Buy food supplies', effects: { gold: -20, food: 20 }, rulerXp: 5 },
+      { text: 'Tax the merchants heavily', effects: { gold: 18, happiness: -4, stability: -1 }, rulerXp: 5 },
+      { text: 'Welcome them freely', effects: { happiness: 5, stability: 2 }, rulerXp: 10 },
     ],
   },
   {
@@ -52,8 +52,9 @@ export const GAME_EVENTS: GameEvent[] = [
     weight: 2,
     condition: (s) => s.resources.happiness > 50 && s.resources.food > 40,
     choices: [
-      { text: 'Celebrate the growth!', effects: { population: 8, happiness: 3, food: -10 } },
-      { text: 'Build housing to prepare', effects: { population: 5, gold: -15 } },
+      { text: 'Celebrate the growth!', effects: { population: 8, happiness: 3, food: -15 }, rulerXp: 5 },
+      { text: 'Build housing to prepare', effects: { population: 5, gold: -20, stability: 2 }, rulerXp: 10 },
+      { text: 'Manage growth carefully', effects: { population: 3, happiness: 1, stability: 3 }, rulerXp: 5 },
     ],
   },
   {
@@ -163,10 +164,10 @@ export const GAME_EVENTS: GameEvent[] = [
     weight: 2,
     minTurn: 5,
     choices: [
-      { text: 'Quarantine the sick', effects: { population: -5, happiness: -4, gold: -10 } },
-      { text: 'Hire healers', effects: { gold: -25, population: -2 } },
-      { text: 'Let it run its course', effects: { population: -10, happiness: -6 } },
-      { text: 'Pray for mercy', effects: { population: -8, stability: -3, happiness: 2 } },
+      { text: 'Quarantine the sick', effects: { population: -3, happiness: -3, gold: -10, stability: 2 }, rulerXp: 10 },
+      { text: 'Hire healers', effects: { gold: -25, population: -1, happiness: 2 }, rulerXp: 15 },
+      { text: 'Let it run its course', effects: { population: -7, happiness: -5 } },
+      { text: 'Pray for mercy', effects: { population: -5, stability: -2, happiness: 3 }, rulerXp: 5 },
     ],
   },
   {

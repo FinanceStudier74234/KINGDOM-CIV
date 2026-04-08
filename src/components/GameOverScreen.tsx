@@ -9,14 +9,17 @@ interface Props {
 }
 
 export const GameOverScreen: React.FC<Props> = ({ state, onRestart, onMenu }) => {
-  const score = calculateScore(state);
+  const score = state.score || calculateScore(state);
   const title = getTitle(score);
+  const isVictory = state.gameOverReason.includes('greatness') || state.gameOverReason.includes('beacon');
 
   return (
-    <div className="gameover-screen">
+    <div className={`gameover-screen ${isVictory ? 'gameover-victory' : ''}`}>
       <div className="gameover-content">
-        <div className="gameover-icon">💀</div>
-        <h2 className="gameover-title">The Kingdom Has Fallen</h2>
+        <div className="gameover-icon">{isVictory ? '👑' : '💀'}</div>
+        <h2 className={`gameover-title ${isVictory ? 'victory-title' : ''}`}>
+          {isVictory ? 'Victory! Long Live the Kingdom!' : 'The Kingdom Has Fallen'}
+        </h2>
         <p className="gameover-reason">{state.gameOverReason}</p>
 
         <div className="gameover-stats">

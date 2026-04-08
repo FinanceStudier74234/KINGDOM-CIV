@@ -39,9 +39,9 @@ export const POLICIES: PolicyDef[] = [
     id: 'free_trade',
     name: 'Free Trade',
     icon: '🚢',
-    description: 'Open borders to merchants. +Gold income, but more unpredictable events.',
+    description: 'Open borders to merchants. +Gold income, but weakens local stability.',
     unlockTurn: 8,
-    effects: { goldIncome: 0.15 },
+    effects: { goldIncome: 0.15, stabilityChange: -0.05 },
   },
   {
     id: 'state_religion',
@@ -80,9 +80,9 @@ export const POLICIES: PolicyDef[] = [
     id: 'expansion_doctrine',
     name: 'Expansion Doctrine',
     icon: '🗺️',
-    description: 'Focus on territorial growth. +Land potential, +Threat.',
+    description: 'Focus on territorial growth. +Army power, but increased threat.',
     unlockTurn: 10,
-    effects: { armyPower: 0.08 },
+    effects: { armyPower: 0.12, happinessChange: -0.04 },
     conflictsWith: ['defensive_posture'],
   },
   {

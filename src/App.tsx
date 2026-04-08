@@ -5,7 +5,7 @@ import {
   KingdomType, RulerBackground, TechId,
 } from './types/game';
 import { createNewGame, saveGame, loadGame, deleteSave, addRulerXp } from './engine/gameState';
-import { processTurn, checkGameOver, calculateScore } from './engine/turnEngine';
+import { processTurn, checkGameOver, checkVictory, calculateScore } from './engine/turnEngine';
 import { rollForEvent, resolveEvent } from './engine/eventEngine';
 import { BUILDINGS, getBuildingCost, getBuildingUpgradeCost } from './data/buildings';
 import { TECHNOLOGIES } from './data/technologies';
@@ -177,6 +177,22 @@ function App() {
   const executeTurn = (state: GameState) => {
     const { newState, summary } = processTurn(state);
     setTurnSummary(summary);
+
+    // Check victory first
+    const victoryMessage = checkVictory(newState);
+    if (victoryMessage) {
+      const finalState: GameState = {
+        ...newState,
+        phase: 'gameover',
+        gameOverReason: victoryMessage,
+        score: calculateScore(newState) * 2, // Double score for victory!
+        currentEvent: null,
+      };
+      setGameState(finalState);
+      saveGame(finalState);
+      setPhase('gameover');
+      return;
+    }
 
     const gameOverReason = checkGameOver(newState);
     if (gameOverReason) {
